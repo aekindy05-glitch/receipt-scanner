@@ -1,0 +1,702 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>สแกนใบเสร็จ → Excel</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --bg:#F6F5F1;
+    --panel:#FFFFFF;
+    --ink:#1E2A28;
+    --sub:#5B6B67;
+    --line:#DDE3E0;
+    --accent:#2F6F62;
+    --accent-dark:#234F45;
+    --accent-soft:#E4F0EC;
+    --warn:#B6541D;
+    --warn-soft:#FCEDE2;
+    --danger:#B0392E;
+    --radius:10px;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:'Sarabun', system-ui, sans-serif; font-size:15px; line-height:1.5;
+    padding:28px 20px 80px;
+  }
+  .wrap{max-width:1180px; margin:0 auto;}
+  header.app-head{margin-bottom:24px;}
+  header.app-head h1{
+    font-size:22px; font-weight:700; margin:0 0 4px; letter-spacing:.2px;
+  }
+  header.app-head p{margin:0; color:var(--sub); font-size:13.5px;}
+
+  .card{
+    background:var(--panel); border:1px solid var(--line); border-radius:var(--radius);
+    padding:18px 20px; margin-bottom:18px;
+  }
+  .card h2{font-size:14.5px; font-weight:600; margin:0 0 14px; color:var(--accent-dark);}
+
+  .grid{display:grid; gap:14px;}
+  .grid.cols-4{grid-template-columns:repeat(4,1fr);}
+  .grid.cols-3{grid-template-columns:1.4fr 1fr 1fr;}
+  @media (max-width:820px){
+    .grid.cols-4{grid-template-columns:1fr 1fr;}
+    .grid.cols-3{grid-template-columns:1fr;}
+  }
+
+  label{display:block; font-size:12.5px; color:var(--sub); margin-bottom:5px; font-weight:500;}
+  input[type=text], input[type=password], input[type=date], select{
+    width:100%; padding:9px 10px; border:1px solid var(--line); border-radius:7px;
+    font-family:inherit; font-size:14px; background:#fff; color:var(--ink);
+  }
+  input:focus, select:focus{outline:2px solid var(--accent-soft); border-color:var(--accent);}
+
+  .drop{
+    border:1.5px dashed var(--line); border-radius:var(--radius);
+    padding:28px 16px; text-align:center; cursor:pointer; background:#FBFBF9;
+    transition:border-color .15s, background .15s;
+  }
+  .drop.drag{border-color:var(--accent); background:var(--accent-soft);}
+  .drop b{color:var(--accent-dark);}
+  .drop .hint{color:var(--sub); font-size:12.5px; margin-top:4px;}
+
+  .filelist{margin-top:12px; display:flex; flex-direction:column; gap:6px;}
+  .filerow{
+    display:flex; align-items:center; gap:10px; font-size:13px;
+    padding:7px 10px; border:1px solid var(--line); border-radius:7px; background:#fff;
+  }
+  .filerow .name{flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .status{font-size:12px; padding:2px 8px; border-radius:20px; font-weight:600; white-space:nowrap;}
+  .status.pending{background:#EEEEEE; color:#666;}
+  .status.working{background:#FFF3D6; color:#8A6300;}
+  .status.done{background:var(--accent-soft); color:var(--accent-dark);}
+  .status.error{background:var(--warn-soft); color:var(--warn);}
+
+  button{
+    font-family:inherit; font-size:13.5px; font-weight:600; cursor:pointer;
+    border-radius:8px; border:1px solid transparent; padding:9px 16px;
+  }
+  .btn-primary{background:var(--accent); color:#fff;}
+  .btn-primary:hover{background:var(--accent-dark);}
+  .btn-primary:disabled{background:#B9C9C4; cursor:not-allowed;}
+  .btn-ghost{background:#fff; border-color:var(--line); color:var(--ink);}
+  .btn-ghost:hover{border-color:var(--accent); color:var(--accent-dark);}
+  .btn-danger{background:#fff; border-color:var(--danger); color:var(--danger); padding:4px 9px; font-size:12px;}
+  .btn-danger:hover{background:#FBEAE8;}
+  .btn-small{padding:4px 9px; font-size:12px;}
+
+  .actions-row{display:flex; gap:10px; margin-top:14px; flex-wrap:wrap; align-items:center;}
+  .actions-row .spacer{flex:1;}
+
+  table.data{width:100%; border-collapse:collapse; font-size:13px;}
+  table.data th, table.data td{border:1px solid var(--line); padding:6px 7px; vertical-align:top;}
+  table.data thead th{background:#F0EFEA; font-weight:600; color:var(--accent-dark); text-align:center; font-size:12.5px;}
+  table.data td input, table.data td select{border:1px solid transparent; padding:4px 5px; font-size:13px; width:100%; background:transparent;}
+  table.data td input:hover, table.data td select:hover{border-color:var(--line);}
+  table.data td input:focus, table.data td select:focus{border-color:var(--accent); background:#fff;}
+  table.data td.num input{text-align:right; font-family:'JetBrains Mono', monospace; font-size:12.5px;}
+  table.data td.center{text-align:center;}
+  .receipt-group:nth-child(even) .g-cell{background:#FAFAF8;}
+  .g-cell{background:#fff;}
+  .item-row-actions{display:flex; gap:4px; justify-content:center;}
+  .empty-hint{color:var(--sub); text-align:center; padding:40px 10px; font-size:13.5px;}
+
+  .flag{
+    display:inline-flex; align-items:center; gap:5px; font-size:11.5px; font-weight:600;
+    padding:2px 8px; border-radius:20px; margin-left:6px;
+  }
+  .flag.tax{background:var(--accent-soft); color:var(--accent-dark);}
+  .flag.plain{background:#EFEFEF; color:#666;}
+  .flag.needpay{background:var(--warn-soft); color:var(--warn);}
+
+  .footer-note{font-size:12px; color:var(--sub); margin-top:6px;}
+  .toolbar-mini{display:flex; gap:6px; margin-top:8px; justify-content:center;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="app-head">
+    <h1>สแกนใบเสร็จ PDF → สรุป Excel รายวัน</h1>
+    <p>อัปโหลดไฟล์ใบเสร็จ/ใบกำกับภาษี (PDF) ให้ Gemini อ่านและแยกข้อมูลให้อัตโนมัติ ตรวจทานแล้วค่อย Export เป็น Excel</p>
+  </header>
+
+  <div class="card">
+    <h2>1. ตั้งค่า</h2>
+    <div class="grid cols-4">
+      <div>
+        <label>Gemini API Key</label>
+        <input type="password" id="apiKey" placeholder="วางคีย์ที่นี่">
+        <label style="display:flex; align-items:center; gap:6px; margin-top:6px; font-weight:400; cursor:pointer;">
+          <input type="checkbox" id="rememberKey" style="width:auto; margin:0;">
+          จำ API key ไว้ในเบราว์เซอร์นี้
+        </label>
+      </div>
+      <div>
+        <label>โมเดล</label>
+        <select id="model">
+          <option value="gemini-3.8-flash" selected>gemini-3.8-flash (เร็ว/ประหยัด แนะนำ)</option>
+          <option value="gemini-3.1-pro">gemini-3.1-pro (แม่นยำกว่า ช้ากว่า)</option>
+          <option value="gemini-3.5-flash-lite">gemini-3.5-flash-lite (ประหยัดสุด)</option>
+        </select>
+      </div>
+      <div>
+        <label>สาขา</label>
+        <input type="text" id="branchName" value="โคราช">
+      </div>
+      <div>
+        <label>วันที่สรุป</label>
+        <input type="date" id="reportDate">
+      </div>
+    </div>
+  <p class="footer-note">API Key ใช้เชื่อมต่อ Gemini โดยตรงจากเบราว์เซอร์ของคุณเท่านั้น ไม่ถูกส่งไปเก็บที่เซิร์ฟเวอร์ไหน — ถ้าไม่ติ๊ก "จำ API key" จะหายไปเมื่อปิดหน้านี้ ถ้าติ๊กไว้จะถูกเก็บไว้เฉพาะในเบราว์เซอร์เครื่องนี้เท่านั้น (localStorage) ไม่ควรติ๊กถ้าใช้เครื่องสาธารณะ/เครื่องที่มีคนอื่นใช้ร่วม</p>
+  </div>
+
+  <div class="card">
+    <h2>2. อัปโหลดไฟล์ใบเสร็จ (PDF)</h2>
+    <div class="drop" id="dropZone">
+      <div><b>ลากไฟล์ PDF มาวางตรงนี้</b> หรือคลิกเพื่อเลือกไฟล์</div>
+      <div class="hint">รองรับหลายไฟล์พร้อมกัน (เช่น ใบเสร็จ 20 ใบต่อวัน)</div>
+      <input type="file" id="fileInput" accept="application/pdf" multiple style="display:none">
+    </div>
+    <div class="filelist" id="fileList"></div>
+    <div class="actions-row">
+      <button class="btn-primary" id="processBtn" disabled>ประมวลผลด้วย Gemini</button>
+      <span class="footer-note" id="progressText"></span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>3. ตรวจทานข้อมูล ก่อน Export</h2>
+    <div id="tableWrap">
+      <div class="empty-hint">ยังไม่มีข้อมูล — อัปโหลดและประมวลผลไฟล์ก่อน</div>
+    </div>
+    <div class="actions-row">
+      <button class="btn-ghost btn-small" id="addManualBtn">+ เพิ่มใบเสร็จด้วยตนเอง</button>
+      <span class="spacer"></span>
+      <span class="footer-note" id="totalsText"></span>
+      <button class="btn-primary" id="exportBtn">Export เป็น Excel</button>
+    </div>
+    <p class="footer-note">⚠ ช่อง "ประเภทการรับเงิน" (เงินสด/โอน/บัตร/เช็ค) ไม่มีอยู่ใน PDF ต้องเลือกเองให้ตรงกับที่ได้รับจริง ก่อน Export</p>
+  </div>
+
+</div>
+
+<script>
+const state = { receipts: [], files: [] };
+
+const el = id => document.getElementById(id);
+
+// default date = today
+(function initDate(){
+  const d = new Date();
+  el('reportDate').value = d.toISOString().slice(0,10);
+})();
+
+// remember API key (localStorage) — only meaningful once this page is hosted
+// (GitHub Pages, Firebase Hosting, etc.) rather than opened inside claude.ai
+(function initRememberedKey(){
+  try{
+    const saved = localStorage.getItem('gemini_api_key');
+    if(saved){
+      el('apiKey').value = saved;
+      el('rememberKey').checked = true;
+    }
+  }catch(e){ /* localStorage unavailable, ignore */ }
+
+  el('rememberKey').addEventListener('change', ()=>{
+    try{
+      if(el('rememberKey').checked){
+        localStorage.setItem('gemini_api_key', el('apiKey').value);
+      } else {
+        localStorage.removeItem('gemini_api_key');
+      }
+    }catch(e){ alert('เบราว์เซอร์นี้ไม่รองรับการจำค่า (localStorage ถูกปิดหรือใช้งานไม่ได้)'); }
+  });
+
+  el('apiKey').addEventListener('input', ()=>{
+    if(el('rememberKey').checked){
+      try{ localStorage.setItem('gemini_api_key', el('apiKey').value); }catch(e){}
+    }
+  });
+})();
+
+function thaiDateLabel(isoDate){
+  if(!isoDate) return '';
+  const months = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
+  const [y,m,d] = isoDate.split('-').map(Number);
+  const beYear = y + 543;
+  return `${d} ${months[m-1]} ${beYear}`;
+}
+
+/* ---------------- File handling ---------------- */
+const dropZone = el('dropZone');
+const fileInput = el('fileInput');
+
+dropZone.addEventListener('click', ()=> fileInput.click());
+dropZone.addEventListener('dragover', e=>{ e.preventDefault(); dropZone.classList.add('drag'); });
+dropZone.addEventListener('dragleave', ()=> dropZone.classList.remove('drag'));
+dropZone.addEventListener('drop', e=>{
+  e.preventDefault(); dropZone.classList.remove('drag');
+  addFiles(e.dataTransfer.files);
+});
+fileInput.addEventListener('change', e=> addFiles(e.target.files));
+
+function addFiles(fileListObj){
+  const arr = Array.from(fileListObj).filter(f=> f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf'));
+  arr.forEach(f=> state.files.push({ file:f, status:'pending', error:null }));
+  renderFileList();
+  el('processBtn').disabled = state.files.length === 0;
+}
+
+function renderFileList(){
+  const wrap = el('fileList');
+  wrap.innerHTML = '';
+  state.files.forEach((item, idx)=>{
+    const row = document.createElement('div');
+    row.className = 'filerow';
+    const statusClass = item.status;
+    const statusLabel = { pending:'รอ', working:'กำลังอ่าน...', done:'เสร็จแล้ว', error:'ผิดพลาด' }[item.status];
+    row.innerHTML = `
+      <span class="name">${item.file.name}</span>
+      <span class="status ${statusClass}">${statusLabel}${item.error ? ' — '+item.error : ''}</span>
+      <button class="btn-danger btn-small" data-idx="${idx}">ลบ</button>
+    `;
+    row.querySelector('button').addEventListener('click', ()=>{
+      state.files.splice(idx,1);
+      renderFileList();
+      el('processBtn').disabled = state.files.length === 0;
+    });
+    wrap.appendChild(row);
+  });
+}
+
+/* ---------------- Gemini extraction ---------------- */
+const SCHEMA = {
+  type: "OBJECT",
+  properties: {
+    so: { type: "STRING", description: "เลขที่ใบสั่งซื้อลูกค้า (Customer PO) ถ้าไม่มีให้เว้นว่าง" },
+    receiptNo: { type: "STRING", description: "เลขที่เอกสาร (เลขที่ใบกำกับ/ใบเสร็จ ที่มุมขวาบน)" },
+    customer: { type: "STRING", description: "ชื่อลูกค้า" },
+    docType: { type: "STRING", enum: ["tax_invoice","receipt_only"], description: "tax_invoice ถ้าเป็นใบกำกับภาษีและมียอด VAT, receipt_only ถ้าเป็นใบเสร็จรับเงินธรรมดาไม่มี VAT" },
+    items: {
+      type: "ARRAY",
+      items: {
+        type: "OBJECT",
+        properties: {
+          code: { type: "STRING" },
+          desc: { type: "STRING" },
+          qty: { type: "NUMBER" },
+          unit: { type: "STRING" },
+          price: { type: "NUMBER", description: "ราคาต่อหน่วย" },
+          discount: { type: "NUMBER", description: "ส่วนลดเฉพาะบรรทัดนี้ ใส่ 0 ถ้าไม่มี" }
+        },
+        required: ["code","desc","qty","unit","price","discount"]
+      }
+    },
+    vat: { type: "NUMBER", description: "ยอดภาษีมูลค่าเพิ่มรวมทั้งบิล ใส่ 0 ถ้าไม่มี" },
+    grandTotal: { type: "NUMBER", description: "จำนวนเงินทั้งสิ้นหลังหักส่วนลดและรวม VAT แล้ว" }
+  },
+  required: ["so","receiptNo","customer","docType","items","vat","grandTotal"]
+};
+
+const PROMPT = `คุณเป็นผู้ช่วยแยกข้อมูลจากใบเสร็จรับเงิน/ใบกำกับภาษีของธุรกิจขายวัสดุตกแต่งภายใน (พื้น PVC, พรม, หญ้าเทียม ฯลฯ)
+อ่านไฟล์ PDF ที่แนบมาอย่างละเอียด แล้วดึงข้อมูลออกมาตาม schema ที่กำหนดเป๊ะๆ:
+- ตัวเลขทุกตัวต้องตรงกับที่พิมพ์อยู่ในเอกสาร ห้ามคำนวณเองถ้ามีตัวเลขระบุไว้แล้ว
+- ชื่อลูกค้า: ตัดคำว่า "(สำนักงานใหญ่)" ออกได้ถ้ามี
+- ถ้าเอกสารหัวกระดาษเขียนว่า "ใบกำกับภาษี" หรือมีเลขประจำตัวผู้เสียภาษีของลูกค้า และมียอด VAT แสดง ให้ docType = "tax_invoice"
+- ถ้าเป็น "ใบเสร็จรับเงิน" เฉยๆ ไม่มียอด VAT ให้ docType = "receipt_only"
+- ดึงรายการสินค้าทุกบรรทัดในตาราง (อย่าข้ามบรรทัดที่ 2 เป็นต้นไป)
+ตอบกลับเป็น JSON ตาม schema เท่านั้น`;
+
+function fileToBase64(file){
+  return new Promise((resolve, reject)=>{
+    const reader = new FileReader();
+    reader.onload = ()=> resolve(reader.result.split(',')[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function sleep(ms){ return new Promise(res=> setTimeout(res, ms)); }
+
+async function extractOne(file, onRetryNote){
+  const apiKey = el('apiKey').value.trim();
+  const model = el('model').value;
+  const base64 = await fileToBase64(file);
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+  const body = {
+    contents: [{
+      parts: [
+        { inlineData: { mimeType: 'application/pdf', data: base64 } },
+        { text: PROMPT }
+      ]
+    }],
+    generationConfig: {
+      responseMimeType: 'application/json',
+      responseSchema: SCHEMA,
+      temperature: 0
+    }
+  };
+
+  const maxAttempts = 5;
+  let lastErr;
+  for(let attempt = 1; attempt <= maxAttempts; attempt++){
+    let res;
+    try{
+      res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+    }catch(networkErr){
+      lastErr = new Error('เชื่อมต่อ Gemini ไม่สำเร็จ (เครือข่าย)');
+      if(attempt < maxAttempts){ if(onRetryNote) onRetryNote(attempt); await sleep(1500 * attempt); continue; }
+      throw lastErr;
+    }
+
+    if(res.ok){
+      const data = await res.json();
+      const textPart = data?.candidates?.[0]?.content?.parts?.map(p=>p.text).join('') || '';
+      if(!textPart) throw new Error('ไม่ได้รับข้อมูลกลับจาก Gemini');
+      try{ return JSON.parse(textPart); }
+      catch(e){ throw new Error('แปลง JSON ไม่สำเร็จ'); }
+    }
+
+    const errText = await res.text().catch(()=> '');
+    const retriable = res.status === 503 || res.status === 429 || res.status === 500;
+    lastErr = new Error(`HTTP ${res.status} ${errText.slice(0,150)}`);
+    if(retriable && attempt < maxAttempts){
+      if(onRetryNote) onRetryNote(attempt);
+      await sleep(2000 * attempt); // backoff: 2s,4s,6s,8s
+      continue;
+    }
+    throw lastErr;
+  }
+  throw lastErr;
+}
+
+el('processBtn').addEventListener('click', async ()=>{
+  const apiKey = el('apiKey').value.trim();
+  if(!apiKey){ alert('กรุณาใส่ Gemini API Key ก่อน'); return; }
+  el('processBtn').disabled = true;
+  const pendingFiles = state.files.filter(f=> f.status === 'pending' || f.status === 'error');
+  let doneCount = 0;
+  for(const item of pendingFiles){
+    item.status = 'working'; item.error = null;
+    renderFileList();
+    el('progressText').textContent = `กำลังประมวลผล ${doneCount+1}/${pendingFiles.length}: ${item.file.name}`;
+    try{
+      const parsed = await extractOne(item.file, (attempt)=>{
+        el('progressText').textContent = `Gemini ไม่ว่าง กำลังลองใหม่ (ครั้งที่ ${attempt+1}) — ${item.file.name}`;
+      });
+      addReceiptFromExtraction(parsed, item.file.name);
+      item.status = 'done';
+    }catch(err){
+      item.status = 'error';
+      item.error = err.message || String(err);
+    }
+    doneCount++;
+    renderFileList();
+    renderTable();
+  }
+  el('progressText').textContent = `เสร็จสิ้น (${doneCount}/${pendingFiles.length} ไฟล์)`;
+  el('processBtn').disabled = false;
+});
+
+function addReceiptFromExtraction(parsed, sourceName){
+  state.receipts.push({
+    id: 'r' + Date.now() + Math.random().toString(36).slice(2,6),
+    so: parsed.so || '',
+    receiptNo: parsed.receiptNo || '',
+    customer: parsed.customer || '',
+    docType: parsed.docType === 'tax_invoice' ? 'tax_invoice' : 'receipt_only',
+    paymentMethod: '',
+    vat: Number(parsed.vat) || 0,
+    grandTotal: Number(parsed.grandTotal) || 0,
+    source: sourceName,
+    items: (parsed.items || []).map(it=> ({
+      code: it.code || '', desc: it.desc || '', qty: Number(it.qty) || 0,
+      unit: it.unit || '', price: Number(it.price) || 0, discount: Number(it.discount) || 0
+    }))
+  });
+}
+
+/* ---------------- Editable table ---------------- */
+function renderTable(){
+  const wrap = el('tableWrap');
+  if(state.receipts.length === 0){
+    wrap.innerHTML = '<div class="empty-hint">ยังไม่มีข้อมูล — อัปโหลดและประมวลผลไฟล์ก่อน</div>';
+    updateTotals();
+    return;
+  }
+  const table = document.createElement('table');
+  table.className = 'data';
+  table.innerHTML = `
+    <thead>
+      <tr>
+        <th>ลำดับ</th><th>SO/POS</th><th>เลขที่เอกสาร</th><th>ชื่อลูกค้า</th>
+        <th>รหัสสินค้า</th><th>รายการ</th><th>จำนวน</th><th>หน่วย</th>
+        <th>ราคา/หน่วย</th><th>รวม</th><th>ส่วนลด</th><th>VAT</th><th>สุทธิ</th>
+        <th>ประเภทรับเงิน</th><th>ใบกำกับ</th><th></th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  `;
+  const tbody = table.querySelector('tbody');
+
+  state.receipts.forEach((r, rIdx)=>{
+    const itemCount = Math.max(r.items.length, 1);
+    r.items.forEach((it, iIdx)=>{
+      const tr = document.createElement('tr');
+      tr.className = 'receipt-group';
+      let cells = '';
+      if(iIdx === 0){
+        cells += `
+          <td class="g-cell center" rowspan="${itemCount}">${rIdx+1}</td>
+          <td class="g-cell" rowspan="${itemCount}"><input data-r="${rIdx}" data-f="so" value="${escAttr(r.so)}"></td>
+          <td class="g-cell" rowspan="${itemCount}"><input data-r="${rIdx}" data-f="receiptNo" value="${escAttr(r.receiptNo)}"></td>
+          <td class="g-cell" rowspan="${itemCount}"><input data-r="${rIdx}" data-f="customer" value="${escAttr(r.customer)}"></td>
+        `;
+      }
+      cells += `
+        <td><input data-r="${rIdx}" data-i="${iIdx}" data-f="code" value="${escAttr(it.code)}"></td>
+        <td><input data-r="${rIdx}" data-i="${iIdx}" data-f="desc" value="${escAttr(it.desc)}"></td>
+        <td class="num"><input data-r="${rIdx}" data-i="${iIdx}" data-f="qty" type="number" step="any" value="${it.qty}"></td>
+        <td><input data-r="${rIdx}" data-i="${iIdx}" data-f="unit" value="${escAttr(it.unit)}"></td>
+        <td class="num"><input data-r="${rIdx}" data-i="${iIdx}" data-f="price" type="number" step="any" value="${it.price}"></td>
+        <td class="num center">${fmt(it.qty * it.price)}</td>
+        <td class="num"><input data-r="${rIdx}" data-i="${iIdx}" data-f="discount" type="number" step="any" value="${it.discount}"></td>
+      `;
+      if(iIdx === 0){
+        cells += `
+          <td class="g-cell num" rowspan="${itemCount}"><input data-r="${rIdx}" data-f="vat" type="number" step="any" value="${r.vat}"></td>
+          <td class="g-cell num" rowspan="${itemCount}"><input data-r="${rIdx}" data-f="grandTotal" type="number" step="any" value="${r.grandTotal}"></td>
+          <td class="g-cell" rowspan="${itemCount}">
+            <select data-r="${rIdx}" data-f="paymentMethod">
+              <option value="" ${r.paymentMethod===''?'selected':''}>— เลือก —</option>
+              <option value="cash" ${r.paymentMethod==='cash'?'selected':''}>เงินสด</option>
+              <option value="transfer" ${r.paymentMethod==='transfer'?'selected':''}>เงินโอน/บัญชี</option>
+              <option value="card" ${r.paymentMethod==='card'?'selected':''}>รูดบัตร</option>
+              <option value="check" ${r.paymentMethod==='check'?'selected':''}>เช็ค</option>
+            </select>
+          </td>
+          <td class="g-cell" rowspan="${itemCount}">
+            <select data-r="${rIdx}" data-f="docType">
+              <option value="tax_invoice" ${r.docType==='tax_invoice'?'selected':''}>ต้องการ</option>
+              <option value="receipt_only" ${r.docType==='receipt_only'?'selected':''}>ไม่ต้องการ</option>
+            </select>
+          </td>
+          <td class="g-cell center" rowspan="${itemCount}">
+            <div class="item-row-actions">
+              <button class="btn-danger btn-small" data-action="del-receipt" data-r="${rIdx}">ลบใบ</button>
+            </div>
+            <div class="toolbar-mini">
+              <button class="btn-ghost btn-small" data-action="add-item" data-r="${rIdx}">+แถว</button>
+            </div>
+          </td>
+        `;
+      } else {
+        cells += `<td class="center"><button class="btn-danger btn-small" data-action="del-item" data-r="${rIdx}" data-i="${iIdx}">ลบแถว</button></td>`;
+      }
+      tr.innerHTML = cells;
+      tbody.appendChild(tr);
+    });
+  });
+
+  wrap.innerHTML = '';
+  wrap.appendChild(table);
+
+  // bind events
+  wrap.querySelectorAll('input, select').forEach(inp=>{
+    inp.addEventListener(inp.tagName === 'SELECT' ? 'change' : 'input', onCellEdit);
+  });
+  wrap.querySelectorAll('[data-action]').forEach(btn=>{
+    btn.addEventListener('click', onAction);
+  });
+
+  updateTotals();
+}
+
+function escAttr(s){
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/"/g,'&quot;');
+}
+function fmt(n){
+  return (Math.round((n||0)*100)/100).toLocaleString('th-TH');
+}
+
+function onCellEdit(e){
+  const t = e.target;
+  const rIdx = Number(t.dataset.r);
+  const field = t.dataset.f;
+  const r = state.receipts[rIdx];
+  if(!r) return;
+  const isNumberField = ['qty','price','discount','vat','grandTotal'].includes(field);
+  const val = isNumberField ? Number(t.value) : t.value;
+  if(t.dataset.i !== undefined){
+    const iIdx = Number(t.dataset.i);
+    r.items[iIdx][field] = val;
+    renderTable(); // refresh computed "รวม" cell
+  } else {
+    r[field] = val;
+    updateTotals();
+  }
+}
+
+function onAction(e){
+  const btn = e.target.closest('[data-action]');
+  const action = btn.dataset.action;
+  const rIdx = Number(btn.dataset.r);
+  if(action === 'del-receipt'){
+    if(confirm('ลบใบเสร็จนี้ทั้งใบ?')){
+      state.receipts.splice(rIdx,1);
+      renderTable();
+    }
+  } else if(action === 'add-item'){
+    state.receipts[rIdx].items.push({ code:'', desc:'', qty:1, unit:'', price:0, discount:0 });
+    renderTable();
+  } else if(action === 'del-item'){
+    const iIdx = Number(btn.dataset.i);
+    const r = state.receipts[rIdx];
+    if(r.items.length > 1) r.items.splice(iIdx,1);
+    else alert('ใบเสร็จต้องมีอย่างน้อย 1 รายการ ถ้าต้องการลบทั้งใบ ให้กด "ลบใบ"');
+    renderTable();
+  }
+}
+
+el('addManualBtn').addEventListener('click', ()=>{
+  state.receipts.push({
+    id: 'r' + Date.now() + Math.random().toString(36).slice(2,6),
+    so:'', receiptNo:'', customer:'', docType:'receipt_only', paymentMethod:'',
+    vat:0, grandTotal:0, source:'manual',
+    items:[{ code:'', desc:'', qty:1, unit:'', price:0, discount:0 }]
+  });
+  renderTable();
+});
+
+function updateTotals(){
+  const totalNet = state.receipts.reduce((s,r)=> s + (Number(r.grandTotal)||0), 0);
+  const totalReceipts = state.receipts.length;
+  el('totalsText').textContent = totalReceipts
+    ? `รวม ${totalReceipts} ใบเสร็จ • ยอดสุทธิรวม ${fmt(totalNet)} บาท`
+    : '';
+}
+
+/* ---------------- Export to Excel ---------------- */
+el('exportBtn').addEventListener('click', ()=>{
+  if(state.receipts.length === 0){ alert('ยังไม่มีข้อมูลให้ export'); return; }
+  const missingPayment = state.receipts.some(r=> !r.paymentMethod);
+  if(missingPayment){
+    if(!confirm('มีใบเสร็จที่ยังไม่ได้เลือก "ประเภทการรับเงิน" ต้องการ export ต่อหรือไม่?')) return;
+  }
+
+  const branch = el('branchName').value.trim() || '-';
+  const dateLabel = thaiDateLabel(el('reportDate').value);
+
+  const HEAD1 = `สรุปรายรับประจำวัน สาขา ${branch}    ประจำวันที่ : ${dateLabel}`;
+  const headerRow2 = ['ลำดับ','SO/POS','เลขที่ใบเสร็จ','ชื่อลูกค้า','รหัสสินค้า','รายการ','จำนวน','หน่วย','ราคาต่อหน่วย','รวม','ส่วนลด','VAT7%','รวมสุทธิ','ประเภทการรับเงิน','','','','รับใบกำกับ/ใบเสร็จ',''];
+  const headerRow3 = ['','','','','','','','','','','','','','เงินสด','เงินโอน/บัญชี','รูดบัตร','เช็ค','ต้องการ','ไม่ต้องการ'];
+
+  const aoa = [ [HEAD1], headerRow2, headerRow3 ];
+
+  const payCol = { cash:13, transfer:14, card:15, check:16 }; // 0-indexed offsets from col N(=13)
+  let rowIdx = 4; // 1-based row for merges bookkeeping
+  const merges = [
+    { s:{r:0,c:0}, e:{r:0,c:18} },
+    { s:{r:1,c:0}, e:{r:2,c:0} },
+    { s:{r:1,c:1}, e:{r:2,c:1} },
+    { s:{r:1,c:2}, e:{r:2,c:2} },
+    { s:{r:1,c:3}, e:{r:2,c:3} },
+    { s:{r:1,c:4}, e:{r:2,c:4} },
+    { s:{r:1,c:5}, e:{r:2,c:5} },
+    { s:{r:1,c:6}, e:{r:2,c:6} },
+    { s:{r:1,c:7}, e:{r:2,c:7} },
+    { s:{r:1,c:8}, e:{r:2,c:8} },
+    { s:{r:1,c:9}, e:{r:2,c:9} },
+    { s:{r:1,c:10}, e:{r:2,c:10} },
+    { s:{r:1,c:11}, e:{r:2,c:11} },
+    { s:{r:1,c:12}, e:{r:2,c:12} },
+    { s:{r:1,c:13}, e:{r:1,c:16} },
+    { s:{r:1,c:17}, e:{r:1,c:18} },
+  ];
+
+  state.receipts.forEach((r, rIdx0)=>{
+    const itemCount = Math.max(r.items.length, 1);
+    r.items.forEach((it, iIdx)=>{
+      const row = new Array(19).fill('');
+      if(iIdx === 0){
+        row[0] = rIdx0 + 1;
+        row[1] = r.so;
+        row[2] = r.receiptNo;
+        row[3] = r.customer;
+      }
+      row[4] = it.code;
+      row[5] = it.desc;
+      row[6] = it.qty;
+      row[7] = it.unit;
+      row[8] = it.price;
+      row[9] = Math.round((it.qty * it.price) * 100) / 100;
+      row[10] = it.discount || '';
+      if(iIdx === 0){
+        row[11] = r.vat || '';
+        row[12] = r.grandTotal || '';
+        if(r.paymentMethod && payCol[r.paymentMethod] !== undefined){
+          row[payCol[r.paymentMethod]] = r.grandTotal || '';
+        }
+        if(r.docType === 'tax_invoice') row[17] = '/'; else row[18] = '/';
+      }
+      aoa.push(row);
+      rowIdx++;
+    });
+    if(itemCount > 1){
+      merges.push({ s:{r:rowIdx-itemCount, c:0}, e:{r:rowIdx-1, c:0} });
+      merges.push({ s:{r:rowIdx-itemCount, c:1}, e:{r:rowIdx-1, c:1} });
+      merges.push({ s:{r:rowIdx-itemCount, c:2}, e:{r:rowIdx-1, c:2} });
+      merges.push({ s:{r:rowIdx-itemCount, c:3}, e:{r:rowIdx-1, c:3} });
+      merges.push({ s:{r:rowIdx-itemCount, c:11}, e:{r:rowIdx-1, c:11} });
+      merges.push({ s:{r:rowIdx-itemCount, c:12}, e:{r:rowIdx-1, c:12} });
+      merges.push({ s:{r:rowIdx-itemCount, c:13}, e:{r:rowIdx-1, c:13} });
+      merges.push({ s:{r:rowIdx-itemCount, c:14}, e:{r:rowIdx-1, c:14} });
+      merges.push({ s:{r:rowIdx-itemCount, c:15}, e:{r:rowIdx-1, c:15} });
+      merges.push({ s:{r:rowIdx-itemCount, c:16}, e:{r:rowIdx-1, c:16} });
+      merges.push({ s:{r:rowIdx-itemCount, c:17}, e:{r:rowIdx-1, c:17} });
+      merges.push({ s:{r:rowIdx-itemCount, c:18}, e:{r:rowIdx-1, c:18} });
+    }
+  });
+
+  // summary row
+  aoa.push([]);
+  const totalRow = new Array(19).fill('');
+  totalRow[8] = 'รวมทั้งสิ้น';
+  totalRow[12] = state.receipts.reduce((s,r)=> s + (Number(r.grandTotal)||0), 0);
+  ['cash','transfer','card','check'].forEach(k=>{
+    totalRow[payCol[k]] = state.receipts.filter(r=>r.paymentMethod===k)
+      .reduce((s,r)=> s + (Number(r.grandTotal)||0), 0) || '';
+  });
+  aoa.push(totalRow);
+
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['!merges'] = merges;
+  ws['!cols'] = [
+    {wch:6},{wch:16},{wch:16},{wch:26},{wch:14},{wch:38},{wch:8},{wch:8},
+    {wch:11},{wch:11},{wch:9},{wch:9},{wch:11},{wch:9},{wch:12},{wch:9},{wch:8},{wch:9},{wch:11}
+  ];
+  ws['!rows'] = [{hpt:22}];
+
+  const wb = XLSX.utils.book_new();
+  const sheetName = (el('reportDate').value || 'สรุป').split('-').reverse().join('.');
+  XLSX.utils.book_append_sheet(wb, ws, sheetName.slice(0,31));
+
+  const fname = `สรุปรายรับ_${branch}_${el('reportDate').value}.xlsx`;
+  XLSX.writeFile(wb, fname);
+});
+
+renderTable();
+</script>
+</body>
+</html>
