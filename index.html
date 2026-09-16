@@ -176,6 +176,13 @@
     <div id="tableWrap">
       <div class="empty-hint">ยังไม่มีข้อมูล — อัปโหลดและประมวลผลไฟล์ก่อน</div>
     </div>
+    <datalist id="channelOptions">
+      <option value="Walk-in">
+      <option value="โทรศัพท์">
+      <option value="Facebook">
+      <option value="Line">
+      <option value="เว็บไซต์">
+    </datalist>
     <div class="actions-row">
       <button class="btn-ghost btn-small" id="addManualBtn">+ เพิ่มใบเสร็จด้วยตนเอง</button>
       <span class="spacer"></span>
@@ -283,6 +290,7 @@ const SCHEMA = {
     so: { type: "STRING", description: "เลขที่ใบสั่งซื้อลูกค้า (Customer PO) ถ้าไม่มีให้เว้นว่าง" },
     receiptNo: { type: "STRING", description: "เลขที่เอกสาร (เลขที่ใบกำกับ/ใบเสร็จ ที่มุมขวาบน)" },
     customer: { type: "STRING", description: "ชื่อลูกค้า" },
+    salesperson: { type: "STRING", description: "ชื่อ/รหัสพนักงานขาย (Salesname ID) ตามที่ปรากฏในเอกสาร เช่น 'RM01-05 อิง' หรือ 'CR03-14 น้ำ โคราช' ถ้าไม่มีให้เว้นว่าง" },
     docType: { type: "STRING", enum: ["tax_invoice","receipt_only"], description: "tax_invoice ถ้าเป็นใบกำกับภาษีและมียอด VAT, receipt_only ถ้าเป็นใบเสร็จรับเงินธรรมดาไม่มี VAT" },
     items: {
       type: "ARRAY",
@@ -302,13 +310,14 @@ const SCHEMA = {
     vat: { type: "NUMBER", description: "ยอดภาษีมูลค่าเพิ่มรวมทั้งบิล ใส่ 0 ถ้าไม่มี" },
     grandTotal: { type: "NUMBER", description: "จำนวนเงินทั้งสิ้นหลังหักส่วนลดและรวม VAT แล้ว" }
   },
-  required: ["so","receiptNo","customer","docType","items","vat","grandTotal"]
+  required: ["so","receiptNo","customer","salesperson","docType","items","vat","grandTotal"]
 };
 
 const PROMPT = `คุณเป็นผู้ช่วยแยกข้อมูลจากใบเสร็จรับเงิน/ใบกำกับภาษีของธุรกิจขายวัสดุตกแต่งภายใน (พื้น PVC, พรม, หญ้าเทียม ฯลฯ)
 อ่านไฟล์ PDF ที่แนบมาอย่างละเอียด แล้วดึงข้อมูลออกมาตาม schema ที่กำหนดเป๊ะๆ:
 - ตัวเลขทุกตัวต้องตรงกับที่พิมพ์อยู่ในเอกสาร ห้ามคำนวณเองถ้ามีตัวเลขระบุไว้แล้ว
 - ชื่อลูกค้า: ตัดคำว่า "(สำนักงานใหญ่)" ออกได้ถ้ามี
+- พนักงานขาย: ดึงจากช่อง "รหัสพนักงานขาย" หรือ "Salesname ID" ในเอกสาร คัดลอกมาตามที่พิมพ์ไว้เป๊ะๆ
 - ถ้าเอกสารหัวกระดาษเขียนว่า "ใบกำกับภาษี" หรือมีเลขประจำตัวผู้เสียภาษีของลูกค้า และมียอด VAT แสดง ให้ docType = "tax_invoice"
 - ถ้าเป็น "ใบเสร็จรับเงิน" เฉยๆ ไม่มียอด VAT ให้ docType = "receipt_only"
 - ดึงรายการสินค้าทุกบรรทัดในตาราง (อย่าข้ามบรรทัดที่ 2 เป็นต้นไป)
@@ -415,8 +424,10 @@ function addReceiptFromExtraction(parsed, sourceName){
     so: parsed.so || '',
     receiptNo: parsed.receiptNo || '',
     customer: parsed.customer || '',
+    salesperson: parsed.salesperson || '',
     docType: parsed.docType === 'tax_invoice' ? 'tax_invoice' : 'receipt_only',
     paymentMethod: '',
+    note: '',
     vat: Number(parsed.vat) || 0,
     grandTotal: Number(parsed.grandTotal) || 0,
     source: sourceName,
@@ -440,10 +451,10 @@ function renderTable(){
   table.innerHTML = `
     <thead>
       <tr>
-        <th>ลำดับ</th><th>SO/POS</th><th>เลขที่เอกสาร</th><th>ชื่อลูกค้า</th>
+        <th>ลำดับ</th><th>SO/POS</th><th>เลขที่เอกสาร</th><th>ชื่อลูกค้า</th><th>พนักงานขาย</th>
         <th>รหัสสินค้า</th><th>รายการ</th><th>จำนวน</th><th>หน่วย</th>
         <th>ราคา/หน่วย</th><th>รวม</th><th>ส่วนลด</th><th>VAT</th><th>สุทธิ</th>
-        <th>ประเภทรับเงิน</th><th>ใบกำกับ</th><th></th>
+        <th>ประเภทรับเงิน</th><th>ใบกำกับ</th><th>หมายเหตุ / ช่องทาง</th><th></th>
       </tr>
     </thead>
     <tbody></tbody>
@@ -462,6 +473,7 @@ function renderTable(){
           <td class="g-cell" rowspan="${itemCount}"><input data-r="${rIdx}" data-f="so" value="${escAttr(r.so)}"></td>
           <td class="g-cell" rowspan="${itemCount}"><input data-r="${rIdx}" data-f="receiptNo" value="${escAttr(r.receiptNo)}"></td>
           <td class="g-cell" rowspan="${itemCount}"><input data-r="${rIdx}" data-f="customer" value="${escAttr(r.customer)}"></td>
+          <td class="g-cell" rowspan="${itemCount}"><input data-r="${rIdx}" data-f="salesperson" value="${escAttr(r.salesperson)}"></td>
         `;
       }
       cells += `
@@ -491,6 +503,9 @@ function renderTable(){
               <option value="tax_invoice" ${r.docType==='tax_invoice'?'selected':''}>ต้องการ</option>
               <option value="receipt_only" ${r.docType==='receipt_only'?'selected':''}>ไม่ต้องการ</option>
             </select>
+          </td>
+          <td class="g-cell" rowspan="${itemCount}">
+            <input list="channelOptions" data-r="${rIdx}" data-f="note" value="${escAttr(r.note)}" placeholder="เช่น Walk-in, Line, FB">
           </td>
           <td class="g-cell center" rowspan="${itemCount}">
             <div class="item-row-actions">
@@ -572,7 +587,7 @@ function onAction(e){
 el('addManualBtn').addEventListener('click', ()=>{
   state.receipts.push({
     id: 'r' + Date.now() + Math.random().toString(36).slice(2,6),
-    so:'', receiptNo:'', customer:'', docType:'receipt_only', paymentMethod:'',
+    so:'', receiptNo:'', customer:'', salesperson:'', docType:'receipt_only', paymentMethod:'', note:'',
     vat:0, grandTotal:0, source:'manual',
     items:[{ code:'', desc:'', qty:1, unit:'', price:0, discount:0 }]
   });
@@ -599,15 +614,16 @@ el('exportBtn').addEventListener('click', ()=>{
   const dateLabel = thaiDateLabel(el('reportDate').value);
 
   const HEAD1 = `สรุปรายรับประจำวัน สาขา ${branch}    ประจำวันที่ : ${dateLabel}`;
-  const headerRow2 = ['ลำดับ','SO/POS','เลขที่ใบเสร็จ','ชื่อลูกค้า','รหัสสินค้า','รายการ','จำนวน','หน่วย','ราคาต่อหน่วย','รวม','ส่วนลด','VAT7%','รวมสุทธิ','ประเภทการรับเงิน','','','','รับใบกำกับ/ใบเสร็จ',''];
-  const headerRow3 = ['','','','','','','','','','','','','','เงินสด','เงินโอน/บัญชี','รูดบัตร','เช็ค','ต้องการ','ไม่ต้องการ'];
+  const headerRow2 = ['ลำดับ','SO/POS','เลขที่ใบเสร็จ','ชื่อลูกค้า','พนักงานขาย','รหัสสินค้า','รายการ','จำนวน','หน่วย','ราคาต่อหน่วย','รวม','ส่วนลด','VAT7%','รวมสุทธิ','ประเภทการรับเงิน','','','','รับใบกำกับ/ใบเสร็จ','','หมายเหตุ/ช่องทาง'];
+  const headerRow3 = ['','','','','','','','','','','','','','','เงินสด','เงินโอน/บัญชี','รูดบัตร','เช็ค','ต้องการ','ไม่ต้องการ',''];
 
   const aoa = [ [HEAD1], headerRow2, headerRow3 ];
 
-  const payCol = { cash:13, transfer:14, card:15, check:16 }; // 0-indexed offsets from col N(=13)
+  const TOTAL_COLS = 21;
+  const payCol = { cash:14, transfer:15, card:16, check:17 }; // 0-indexed
   let rowIdx = 4; // 1-based row for merges bookkeeping
   const merges = [
-    { s:{r:0,c:0}, e:{r:0,c:18} },
+    { s:{r:0,c:0}, e:{r:0,c:TOTAL_COLS-1} },
     { s:{r:1,c:0}, e:{r:2,c:0} },
     { s:{r:1,c:1}, e:{r:2,c:1} },
     { s:{r:1,c:2}, e:{r:2,c:2} },
@@ -621,59 +637,54 @@ el('exportBtn').addEventListener('click', ()=>{
     { s:{r:1,c:10}, e:{r:2,c:10} },
     { s:{r:1,c:11}, e:{r:2,c:11} },
     { s:{r:1,c:12}, e:{r:2,c:12} },
-    { s:{r:1,c:13}, e:{r:1,c:16} },
-    { s:{r:1,c:17}, e:{r:1,c:18} },
+    { s:{r:1,c:13}, e:{r:2,c:13} },
+    { s:{r:1,c:14}, e:{r:1,c:17} },
+    { s:{r:1,c:18}, e:{r:1,c:19} },
+    { s:{r:1,c:20}, e:{r:2,c:20} },
   ];
 
   state.receipts.forEach((r, rIdx0)=>{
     const itemCount = Math.max(r.items.length, 1);
     r.items.forEach((it, iIdx)=>{
-      const row = new Array(19).fill('');
+      const row = new Array(TOTAL_COLS).fill('');
       if(iIdx === 0){
         row[0] = rIdx0 + 1;
         row[1] = r.so;
         row[2] = r.receiptNo;
         row[3] = r.customer;
+        row[4] = r.salesperson;
       }
-      row[4] = it.code;
-      row[5] = it.desc;
-      row[6] = it.qty;
-      row[7] = it.unit;
-      row[8] = it.price;
-      row[9] = Math.round((it.qty * it.price) * 100) / 100;
-      row[10] = it.discount || '';
+      row[5] = it.code;
+      row[6] = it.desc;
+      row[7] = it.qty;
+      row[8] = it.unit;
+      row[9] = it.price;
+      row[10] = Math.round((it.qty * it.price) * 100) / 100;
+      row[11] = it.discount || '';
       if(iIdx === 0){
-        row[11] = r.vat || '';
-        row[12] = r.grandTotal || '';
+        row[12] = r.vat || '';
+        row[13] = r.grandTotal || '';
         if(r.paymentMethod && payCol[r.paymentMethod] !== undefined){
           row[payCol[r.paymentMethod]] = r.grandTotal || '';
         }
-        if(r.docType === 'tax_invoice') row[17] = '/'; else row[18] = '/';
+        if(r.docType === 'tax_invoice') row[18] = '/'; else row[19] = '/';
+        row[20] = r.note || '';
       }
       aoa.push(row);
       rowIdx++;
     });
     if(itemCount > 1){
-      merges.push({ s:{r:rowIdx-itemCount, c:0}, e:{r:rowIdx-1, c:0} });
-      merges.push({ s:{r:rowIdx-itemCount, c:1}, e:{r:rowIdx-1, c:1} });
-      merges.push({ s:{r:rowIdx-itemCount, c:2}, e:{r:rowIdx-1, c:2} });
-      merges.push({ s:{r:rowIdx-itemCount, c:3}, e:{r:rowIdx-1, c:3} });
-      merges.push({ s:{r:rowIdx-itemCount, c:11}, e:{r:rowIdx-1, c:11} });
-      merges.push({ s:{r:rowIdx-itemCount, c:12}, e:{r:rowIdx-1, c:12} });
-      merges.push({ s:{r:rowIdx-itemCount, c:13}, e:{r:rowIdx-1, c:13} });
-      merges.push({ s:{r:rowIdx-itemCount, c:14}, e:{r:rowIdx-1, c:14} });
-      merges.push({ s:{r:rowIdx-itemCount, c:15}, e:{r:rowIdx-1, c:15} });
-      merges.push({ s:{r:rowIdx-itemCount, c:16}, e:{r:rowIdx-1, c:16} });
-      merges.push({ s:{r:rowIdx-itemCount, c:17}, e:{r:rowIdx-1, c:17} });
-      merges.push({ s:{r:rowIdx-itemCount, c:18}, e:{r:rowIdx-1, c:18} });
+      [0,1,2,3,4,12,13,14,15,16,17,18,19,20].forEach(c=>{
+        merges.push({ s:{r:rowIdx-itemCount, c}, e:{r:rowIdx-1, c} });
+      });
     }
   });
 
   // summary row
   aoa.push([]);
-  const totalRow = new Array(19).fill('');
-  totalRow[8] = 'รวมทั้งสิ้น';
-  totalRow[12] = state.receipts.reduce((s,r)=> s + (Number(r.grandTotal)||0), 0);
+  const totalRow = new Array(TOTAL_COLS).fill('');
+  totalRow[9] = 'รวมทั้งสิ้น';
+  totalRow[13] = state.receipts.reduce((s,r)=> s + (Number(r.grandTotal)||0), 0);
   ['cash','transfer','card','check'].forEach(k=>{
     totalRow[payCol[k]] = state.receipts.filter(r=>r.paymentMethod===k)
       .reduce((s,r)=> s + (Number(r.grandTotal)||0), 0) || '';
@@ -683,8 +694,8 @@ el('exportBtn').addEventListener('click', ()=>{
   const ws = XLSX.utils.aoa_to_sheet(aoa);
   ws['!merges'] = merges;
   ws['!cols'] = [
-    {wch:6},{wch:16},{wch:16},{wch:26},{wch:14},{wch:38},{wch:8},{wch:8},
-    {wch:11},{wch:11},{wch:9},{wch:9},{wch:11},{wch:9},{wch:12},{wch:9},{wch:8},{wch:9},{wch:11}
+    {wch:6},{wch:16},{wch:16},{wch:26},{wch:14},{wch:14},{wch:38},{wch:8},{wch:8},
+    {wch:11},{wch:11},{wch:9},{wch:9},{wch:11},{wch:9},{wch:12},{wch:9},{wch:8},{wch:9},{wch:11},{wch:20}
   ];
   ws['!rows'] = [{hpt:22}];
 
