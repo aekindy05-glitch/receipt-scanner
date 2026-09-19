@@ -6,7 +6,7 @@
 <title>สแกนใบเสร็จ → Excel</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
 <style>
   :root{
     --bg:#F6F5F1;
@@ -140,9 +140,9 @@
       <div>
         <label>โมเดล</label>
         <select id="model">
-          <option value="gemini-3.8-flash" selected>gemini-3.8-flash (เร็ว/ประหยัด แนะนำ)</option>
-          <option value="gemini-3.1-pro">gemini-3.1-pro (แม่นยำกว่า ช้ากว่า)</option>
-          <option value="gemini-3.5-flash-lite">gemini-3.5-flash-lite (ประหยัดสุด)</option>
+          <option value="gemini-3.5-flash-lite" selected>gemini-3.5-flash-lite (แนะนำ — ฟรี 500 ครั้ง/วัน)</option>
+          <option value="gemini-3.8-flash">gemini-3.8-flash (แม่นยำกว่า แต่ฟรีแค่ ~20 ครั้ง/วัน)</option>
+          <option value="gemini-3.1-pro">gemini-3.1-pro (แม่นยำสูงสุด โควตาฟรีจำกัดมาก)</option>
         </select>
       </div>
       <div>
@@ -153,8 +153,13 @@
         <label>วันที่สรุป</label>
         <input type="date" id="reportDate">
       </div>
+      <div>
+        <label>ผู้จัดทำ</label>
+        <input type="text" id="preparerName" placeholder="ชื่อ-นามสกุลผู้จัดทำ">
+      </div>
     </div>
   <p class="footer-note">API Key ใช้เชื่อมต่อ Gemini โดยตรงจากเบราว์เซอร์ของคุณเท่านั้น ไม่ถูกส่งไปเก็บที่เซิร์ฟเวอร์ไหน — ถ้าไม่ติ๊ก "จำ API key" จะหายไปเมื่อปิดหน้านี้ ถ้าติ๊กไว้จะถูกเก็บไว้เฉพาะในเบราว์เซอร์เครื่องนี้เท่านั้น (localStorage) ไม่ควรติ๊กถ้าใช้เครื่องสาธารณะ/เครื่องที่มีคนอื่นใช้ร่วม</p>
+  <p class="footer-note">💡 แต่ละโมเดลมีโควตาฟรีแยกกันคนละก้อน ถ้าใช้โมเดลหนึ่งจนโควตาวันนี้หมด (ขึ้น error 429) ลองสลับไปโมเดลอื่นในดรอปดาวน์ได้ทันที ไม่ต้องรอข้ามวัน</p>
   </div>
 
   <div class="card">
@@ -177,14 +182,16 @@
       <div class="empty-hint">ยังไม่มีข้อมูล — อัปโหลดและประมวลผลไฟล์ก่อน</div>
     </div>
     <datalist id="channelOptions">
-      <option value="Walk-in">
-      <option value="โทรศัพท์">
-      <option value="Facebook">
-      <option value="Line">
-      <option value="เว็บไซต์">
+      <option value="Call-in">
+      <option value="ลูกค้า Facebook">
+      <option value="ลูกค้า Line @">
+      <option value="ลูกค้า Web">
+      <option value="WALK IN">
+      <option value="Line ส่วนตัว">
     </datalist>
     <div class="actions-row">
       <button class="btn-ghost btn-small" id="addManualBtn">+ เพิ่มใบเสร็จด้วยตนเอง</button>
+      <button class="btn-danger btn-small" id="resetBtn">↺ รีเซ็ต / เริ่มบิลใหม่</button>
       <span class="spacer"></span>
       <span class="footer-note" id="totalsText"></span>
       <button class="btn-primary" id="exportBtn">Export เป็น Excel</button>
@@ -308,9 +315,10 @@ const SCHEMA = {
       }
     },
     vat: { type: "NUMBER", description: "ยอดภาษีมูลค่าเพิ่มรวมทั้งบิล ใส่ 0 ถ้าไม่มี" },
+    extraDiscount: { type: "NUMBER", description: "ส่วนลดขออนุมัติเพิ่มเติม (แยกต่างหากจากส่วนลดต่อรายการสินค้า) — ดูจากกล่องสรุปยอดท้ายเอกสาร ช่องที่เขียนว่า 'ส่วนลด' / 'Discount' ซึ่งอยู่ใต้บรรทัด 'จำนวนเงิน'/'Amount' และเหนือบรรทัด 'จำนวนเงินหลังหักส่วนลด'/'Amount after discount' เอาค่าตัวเลขในช่องนี้มาตรงๆ ถ้าค่าเป็น 0 หรือไม่มีกล่องนี้ ให้ใส่ 0" },
     grandTotal: { type: "NUMBER", description: "จำนวนเงินทั้งสิ้นหลังหักส่วนลดและรวม VAT แล้ว" }
   },
-  required: ["so","receiptNo","customer","salesperson","docType","items","vat","grandTotal"]
+  required: ["so","receiptNo","customer","salesperson","docType","items","vat","extraDiscount","grandTotal"]
 };
 
 const PROMPT = `คุณเป็นผู้ช่วยแยกข้อมูลจากใบเสร็จรับเงิน/ใบกำกับภาษีของธุรกิจขายวัสดุตกแต่งภายใน (พื้น PVC, พรม, หญ้าเทียม ฯลฯ)
@@ -321,6 +329,7 @@ const PROMPT = `คุณเป็นผู้ช่วยแยกข้อม�
 - ถ้าเอกสารหัวกระดาษเขียนว่า "ใบกำกับภาษี" หรือมีเลขประจำตัวผู้เสียภาษีของลูกค้า และมียอด VAT แสดง ให้ docType = "tax_invoice"
 - ถ้าเป็น "ใบเสร็จรับเงิน" เฉยๆ ไม่มียอด VAT ให้ docType = "receipt_only"
 - ดึงรายการสินค้าทุกบรรทัดในตาราง (อย่าข้ามบรรทัดที่ 2 เป็นต้นไป)
+- ส่วนลดมี 2 แบบที่ต้องแยกกันให้ถูก: (1) ส่วนลดต่อรายการสินค้า อยู่ในตารางรายการแต่ละแถว ให้ใส่ในช่อง discount ของ item นั้นๆ (2) ส่วนลดขออนุมัติเพิ่มเติม อยู่ในกล่องสรุปยอดท้ายเอกสาร (ช่อง "ส่วนลด"/"Discount" ที่อยู่ใต้ "จำนวนเงิน"/"Amount") ให้ใส่ในช่อง extraDiscount ของ schema แยกต่างหาก ห้ามเอาไปปนกับส่วนลดต่อรายการ
 ตอบกลับเป็น JSON ตาม schema เท่านั้น`;
 
 function fileToBase64(file){
@@ -413,6 +422,7 @@ el('processBtn').addEventListener('click', async ()=>{
     doneCount++;
     renderFileList();
     renderTable();
+    if(doneCount < pendingFiles.length){ await sleep(1200); } // small gap between files to avoid per-minute rate limits
   }
   el('progressText').textContent = `เสร็จสิ้น (${doneCount}/${pendingFiles.length} ไฟล์)`;
   el('processBtn').disabled = false;
@@ -429,6 +439,8 @@ function addReceiptFromExtraction(parsed, sourceName){
     paymentMethod: '',
     note: '',
     vat: Number(parsed.vat) || 0,
+    extraDiscount: Number(parsed.extraDiscount) || 0,
+    hasExtraDiscount: (Number(parsed.extraDiscount) || 0) > 0,
     grandTotal: Number(parsed.grandTotal) || 0,
     source: sourceName,
     items: (parsed.items || []).map(it=> ({
@@ -451,10 +463,10 @@ function renderTable(){
   table.innerHTML = `
     <thead>
       <tr>
-        <th>ลำดับ</th><th>SO/POS</th><th>เลขที่เอกสาร</th><th>ชื่อลูกค้า</th><th>พนักงานขาย</th>
+        <th>ลำดับ</th><th>SO/POS</th><th>เลขที่เอกสาร</th><th>ชื่อลูกค้า</th>
         <th>รหัสสินค้า</th><th>รายการ</th><th>จำนวน</th><th>หน่วย</th>
         <th>ราคา/หน่วย</th><th>รวม</th><th>ส่วนลด</th><th>VAT</th><th>สุทธิ</th>
-        <th>ประเภทรับเงิน</th><th>ใบกำกับ</th><th>หมายเหตุ / ช่องทาง</th><th></th>
+        <th>ประเภทรับเงิน</th><th>ใบกำกับ</th><th>พนักงานขาย</th><th>หมายเหตุ / ช่องทาง</th><th></th>
       </tr>
     </thead>
     <tbody></tbody>
@@ -463,17 +475,18 @@ function renderTable(){
 
   state.receipts.forEach((r, rIdx)=>{
     const itemCount = Math.max(r.items.length, 1);
+    const hasExtra = !!r.hasExtraDiscount;
+    const groupRows = itemCount + (hasExtra ? 1 : 0);
     r.items.forEach((it, iIdx)=>{
       const tr = document.createElement('tr');
       tr.className = 'receipt-group';
       let cells = '';
       if(iIdx === 0){
         cells += `
-          <td class="g-cell center" rowspan="${itemCount}">${rIdx+1}</td>
-          <td class="g-cell" rowspan="${itemCount}"><input data-r="${rIdx}" data-f="so" value="${escAttr(r.so)}"></td>
-          <td class="g-cell" rowspan="${itemCount}"><input data-r="${rIdx}" data-f="receiptNo" value="${escAttr(r.receiptNo)}"></td>
-          <td class="g-cell" rowspan="${itemCount}"><input data-r="${rIdx}" data-f="customer" value="${escAttr(r.customer)}"></td>
-          <td class="g-cell" rowspan="${itemCount}"><input data-r="${rIdx}" data-f="salesperson" value="${escAttr(r.salesperson)}"></td>
+          <td class="g-cell center" rowspan="${groupRows}">${rIdx+1}</td>
+          <td class="g-cell" rowspan="${groupRows}"><input data-r="${rIdx}" data-f="so" value="${escAttr(r.so)}"></td>
+          <td class="g-cell" rowspan="${groupRows}"><input data-r="${rIdx}" data-f="receiptNo" value="${escAttr(r.receiptNo)}"></td>
+          <td class="g-cell" rowspan="${groupRows}"><input data-r="${rIdx}" data-f="customer" value="${escAttr(r.customer)}"></td>
         `;
       }
       cells += `
@@ -487,9 +500,9 @@ function renderTable(){
       `;
       if(iIdx === 0){
         cells += `
-          <td class="g-cell num" rowspan="${itemCount}"><input data-r="${rIdx}" data-f="vat" type="number" step="any" value="${r.vat}"></td>
-          <td class="g-cell num" rowspan="${itemCount}"><input data-r="${rIdx}" data-f="grandTotal" type="number" step="any" value="${r.grandTotal}"></td>
-          <td class="g-cell" rowspan="${itemCount}">
+          <td class="g-cell num" rowspan="${groupRows}"><input data-r="${rIdx}" data-f="vat" type="number" step="any" value="${r.vat}"></td>
+          <td class="g-cell num" rowspan="${groupRows}"><input data-r="${rIdx}" data-f="grandTotal" type="number" step="any" value="${r.grandTotal}"></td>
+          <td class="g-cell" rowspan="${groupRows}">
             <select data-r="${rIdx}" data-f="paymentMethod">
               <option value="" ${r.paymentMethod===''?'selected':''}>— เลือก —</option>
               <option value="cash" ${r.paymentMethod==='cash'?'selected':''}>เงินสด</option>
@@ -498,22 +511,24 @@ function renderTable(){
               <option value="check" ${r.paymentMethod==='check'?'selected':''}>เช็ค</option>
             </select>
           </td>
-          <td class="g-cell" rowspan="${itemCount}">
+          <td class="g-cell" rowspan="${groupRows}">
             <select data-r="${rIdx}" data-f="docType">
               <option value="tax_invoice" ${r.docType==='tax_invoice'?'selected':''}>ต้องการ</option>
               <option value="receipt_only" ${r.docType==='receipt_only'?'selected':''}>ไม่ต้องการ</option>
             </select>
           </td>
-          <td class="g-cell" rowspan="${itemCount}">
-            <input list="channelOptions" data-r="${rIdx}" data-f="note" value="${escAttr(r.note)}" placeholder="เช่น Walk-in, Line, FB">
+          <td class="g-cell" rowspan="${groupRows}"><input data-r="${rIdx}" data-f="salesperson" value="${escAttr(r.salesperson)}"></td>
+          <td class="g-cell" rowspan="${groupRows}">
+            <input list="channelOptions" data-r="${rIdx}" data-f="note" value="${escAttr(r.note)}" placeholder="เช่น Call-in, WALK IN">
           </td>
-          <td class="g-cell center" rowspan="${itemCount}">
+          <td class="g-cell center" rowspan="${groupRows}">
             <div class="item-row-actions">
               <button class="btn-danger btn-small" data-action="del-receipt" data-r="${rIdx}">ลบใบ</button>
             </div>
             <div class="toolbar-mini">
               <button class="btn-ghost btn-small" data-action="add-item" data-r="${rIdx}">+แถว</button>
             </div>
+            ${!hasExtra ? `<div class="toolbar-mini"><button class="btn-ghost btn-small" data-action="add-extra-discount" data-r="${rIdx}">+ส่วนลดพิเศษ</button></div>` : ''}
           </td>
         `;
       } else {
@@ -522,6 +537,18 @@ function renderTable(){
       tr.innerHTML = cells;
       tbody.appendChild(tr);
     });
+    if(hasExtra){
+      const tr = document.createElement('tr');
+      tr.className = 'receipt-group extra-discount-row';
+      tr.innerHTML = `
+        <td></td>
+        <td colspan="1" style="font-weight:600;">**ส่วนลดขออนุมัติตามเอกสารแนบ**</td>
+        <td></td><td></td><td></td><td class="center">-</td>
+        <td class="num"><input data-r="${rIdx}" data-f="extraDiscount" type="number" step="any" value="${r.extraDiscount||0}"></td>
+        <td class="center"><button class="btn-danger btn-small" data-action="del-extra-discount" data-r="${rIdx}">ลบ</button></td>
+      `;
+      tbody.appendChild(tr);
+    }
   });
 
   wrap.innerHTML = '';
@@ -544,6 +571,15 @@ function escAttr(s){
 function fmt(n){
   return (Math.round((n||0)*100)/100).toLocaleString('th-TH');
 }
+function excelColLetter(n){
+  let s = '';
+  while(n > 0){
+    const rem = (n - 1) % 26;
+    s = String.fromCharCode(65 + rem) + s;
+    n = Math.floor((n - 1) / 26);
+  }
+  return s;
+}
 
 function onCellEdit(e){
   const t = e.target;
@@ -551,7 +587,7 @@ function onCellEdit(e){
   const field = t.dataset.f;
   const r = state.receipts[rIdx];
   if(!r) return;
-  const isNumberField = ['qty','price','discount','vat','grandTotal'].includes(field);
+  const isNumberField = ['qty','price','discount','vat','grandTotal','extraDiscount'].includes(field);
   const val = isNumberField ? Number(t.value) : t.value;
   if(t.dataset.i !== undefined){
     const iIdx = Number(t.dataset.i);
@@ -581,14 +617,33 @@ function onAction(e){
     if(r.items.length > 1) r.items.splice(iIdx,1);
     else alert('ใบเสร็จต้องมีอย่างน้อย 1 รายการ ถ้าต้องการลบทั้งใบ ให้กด "ลบใบ"');
     renderTable();
+  } else if(action === 'add-extra-discount'){
+    state.receipts[rIdx].hasExtraDiscount = true;
+    if(!state.receipts[rIdx].extraDiscount) state.receipts[rIdx].extraDiscount = 0;
+    renderTable();
+  } else if(action === 'del-extra-discount'){
+    state.receipts[rIdx].hasExtraDiscount = false;
+    state.receipts[rIdx].extraDiscount = 0;
+    renderTable();
   }
 }
+
+el('resetBtn').addEventListener('click', ()=>{
+  if(state.receipts.length === 0 && state.files.length === 0){ return; }
+  if(!confirm('ล้างรายการใบเสร็จและไฟล์ทั้งหมดที่ยังไม่ได้ export เพื่อเริ่มบิลใหม่? การกระทำนี้ย้อนกลับไม่ได้')) return;
+  state.receipts = [];
+  state.files = [];
+  fileInput.value = '';
+  el('progressText').textContent = '';
+  renderFileList();
+  renderTable();
+});
 
 el('addManualBtn').addEventListener('click', ()=>{
   state.receipts.push({
     id: 'r' + Date.now() + Math.random().toString(36).slice(2,6),
     so:'', receiptNo:'', customer:'', salesperson:'', docType:'receipt_only', paymentMethod:'', note:'',
-    vat:0, grandTotal:0, source:'manual',
+    vat:0, extraDiscount:0, hasExtraDiscount:false, grandTotal:0, source:'manual',
     items:[{ code:'', desc:'', qty:1, unit:'', price:0, discount:0 }]
   });
   renderTable();
@@ -602,8 +657,27 @@ function updateTotals(){
     : '';
 }
 
-/* ---------------- Export to Excel ---------------- */
-el('exportBtn').addEventListener('click', ()=>{
+/* ---------------- Export to Excel (styled, via ExcelJS) ---------------- */
+const FONT_NAME = 'TH Sarabun New';
+const COLOR_ACCENT = 'FF2F6F62';      // header fill (dark teal)
+const COLOR_ACCENT_TEXT = 'FFFFFFFF'; // header text (white)
+const COLOR_BAND = 'FFF3F6F5';        // subtle row banding
+const COLOR_EXTRA_DISCOUNT = 'FFFFE699'; // yellow highlight for extra-discount row
+const COLOR_TOTAL_FILL = 'FFE4EFEC';
+const THIN_BORDER = { style: 'thin', color: { argb: 'FFCBD5D1' } };
+const ALL_BORDERS = { top: THIN_BORDER, bottom: THIN_BORDER, left: THIN_BORDER, right: THIN_BORDER };
+
+// columns that read better left-aligned (longer free text); everything else is centered per request
+const LEFT_ALIGN_COLS = new Set([3, 5, 19, 20]); // ชื่อลูกค้า, รายการ, พนักงานขาย, หมายเหตุ/ช่องทาง
+const MONEY_COLS = new Set([8, 9, 10, 11, 12, 13, 14, 15, 16]);
+
+function estimateWidth(text){
+  const s = String(text ?? '');
+  // Thai glyphs render a bit wider than plain count assumes; pad generously.
+  return s.length;
+}
+
+el('exportBtn').addEventListener('click', async ()=>{
   if(state.receipts.length === 0){ alert('ยังไม่มีข้อมูลให้ export'); return; }
   const missingPayment = state.receipts.some(r=> !r.paymentMethod);
   if(missingPayment){
@@ -612,39 +686,23 @@ el('exportBtn').addEventListener('click', ()=>{
 
   const branch = el('branchName').value.trim() || '-';
   const dateLabel = thaiDateLabel(el('reportDate').value);
-
-  const HEAD1 = `สรุปรายรับประจำวัน สาขา ${branch}    ประจำวันที่ : ${dateLabel}`;
-  const headerRow2 = ['ลำดับ','SO/POS','เลขที่ใบเสร็จ','ชื่อลูกค้า','พนักงานขาย','รหัสสินค้า','รายการ','จำนวน','หน่วย','ราคาต่อหน่วย','รวม','ส่วนลด','VAT7%','รวมสุทธิ','ประเภทการรับเงิน','','','','รับใบกำกับ/ใบเสร็จ','','หมายเหตุ/ช่องทาง'];
-  const headerRow3 = ['','','','','','','','','','','','','','','เงินสด','เงินโอน/บัญชี','รูดบัตร','เช็ค','ต้องการ','ไม่ต้องการ',''];
-
-  const aoa = [ [HEAD1], headerRow2, headerRow3 ];
-
   const TOTAL_COLS = 21;
-  const payCol = { cash:14, transfer:15, card:16, check:17 }; // 0-indexed
-  let rowIdx = 4; // 1-based row for merges bookkeeping
-  const merges = [
-    { s:{r:0,c:0}, e:{r:0,c:TOTAL_COLS-1} },
-    { s:{r:1,c:0}, e:{r:2,c:0} },
-    { s:{r:1,c:1}, e:{r:2,c:1} },
-    { s:{r:1,c:2}, e:{r:2,c:2} },
-    { s:{r:1,c:3}, e:{r:2,c:3} },
-    { s:{r:1,c:4}, e:{r:2,c:4} },
-    { s:{r:1,c:5}, e:{r:2,c:5} },
-    { s:{r:1,c:6}, e:{r:2,c:6} },
-    { s:{r:1,c:7}, e:{r:2,c:7} },
-    { s:{r:1,c:8}, e:{r:2,c:8} },
-    { s:{r:1,c:9}, e:{r:2,c:9} },
-    { s:{r:1,c:10}, e:{r:2,c:10} },
-    { s:{r:1,c:11}, e:{r:2,c:11} },
-    { s:{r:1,c:12}, e:{r:2,c:12} },
-    { s:{r:1,c:13}, e:{r:2,c:13} },
-    { s:{r:1,c:14}, e:{r:1,c:17} },
-    { s:{r:1,c:18}, e:{r:1,c:19} },
-    { s:{r:1,c:20}, e:{r:2,c:20} },
-  ];
+  const payCol = { cash:13, transfer:14, card:15, check:16 };
+
+  const headerRow2 = ['ลำดับ','SO/POS','เลขที่ใบเสร็จ','ชื่อลูกค้า','รหัสสินค้า','รายการ','จำนวน','หน่วย','ราคาต่อหน่วย','รวม','ส่วนลด','VAT7%','รวมสุทธิ','ประเภทการรับเงิน','','','','รับใบกำกับ/ใบเสร็จ','','พนักงานขาย','หมายเหตุ/ช่องทาง'];
+  const headerRow3 = ['','','','','','','','','','','','','','เงินสด','เงินโอน/บัญชี','รูดบัตร','เช็ค','ต้องการ','ไม่ต้องการ','',''];
+
+  // ---- Build plain data rows first (same grouping logic as before) ----
+  const dataRows = []; // each: { cells: [...], isExtra: bool, groupStart: bool }
+  const groupRanges = []; // { startRow, endRow } 0-indexed within dataRows
+  const colMaxLen = headerRow2.map((h,i)=> estimateWidth(h));
 
   state.receipts.forEach((r, rIdx0)=>{
     const itemCount = Math.max(r.items.length, 1);
+    const hasExtra = !!r.hasExtraDiscount;
+    const groupRows = itemCount + (hasExtra ? 1 : 0);
+    const startIdx = dataRows.length;
+
     r.items.forEach((it, iIdx)=>{
       const row = new Array(TOTAL_COLS).fill('');
       if(iIdx === 0){
@@ -652,59 +710,238 @@ el('exportBtn').addEventListener('click', ()=>{
         row[1] = r.so;
         row[2] = r.receiptNo;
         row[3] = r.customer;
-        row[4] = r.salesperson;
       }
-      row[5] = it.code;
-      row[6] = it.desc;
-      row[7] = it.qty;
-      row[8] = it.unit;
-      row[9] = it.price;
-      row[10] = Math.round((it.qty * it.price) * 100) / 100;
-      row[11] = it.discount || '';
+      row[4] = it.code;
+      row[5] = it.desc;
+      row[6] = it.qty;
+      row[7] = it.unit;
+      row[8] = it.price;
+      row[9] = Math.round((it.qty * it.price) * 100) / 100;
+      row[10] = it.discount || '';
       if(iIdx === 0){
-        row[12] = r.vat || '';
-        row[13] = r.grandTotal || '';
+        row[11] = r.vat || '';
+        row[12] = r.grandTotal || '';
         if(r.paymentMethod && payCol[r.paymentMethod] !== undefined){
           row[payCol[r.paymentMethod]] = r.grandTotal || '';
         }
-        if(r.docType === 'tax_invoice') row[18] = '/'; else row[19] = '/';
+        if(r.docType === 'tax_invoice') row[17] = '/'; else row[18] = '/';
+        row[19] = r.salesperson || '';
         row[20] = r.note || '';
       }
-      aoa.push(row);
-      rowIdx++;
+      row.forEach((v,i)=> colMaxLen[i] = Math.max(colMaxLen[i], estimateWidth(v)));
+      dataRows.push({ cells: row, isExtra: false });
     });
-    if(itemCount > 1){
-      [0,1,2,3,4,12,13,14,15,16,17,18,19,20].forEach(c=>{
-        merges.push({ s:{r:rowIdx-itemCount, c}, e:{r:rowIdx-1, c} });
-      });
+
+    if(hasExtra){
+      const row = new Array(TOTAL_COLS).fill('');
+      row[5] = 'ส่วนลดขออนุมัติตามเอกสารแนบ';
+      row[9] = '-';
+      row[10] = r.extraDiscount || 0;
+      row.forEach((v,i)=> colMaxLen[i] = Math.max(colMaxLen[i], estimateWidth(v)));
+      dataRows.push({ cells: row, isExtra: true });
+    }
+
+    if(groupRows > 1){
+      groupRanges.push({ startRow: startIdx, endRow: dataRows.length - 1 });
     }
   });
 
-  // summary row
-  aoa.push([]);
+  const totalNet = state.receipts.reduce((s,r)=> s + (Number(r.grandTotal)||0), 0);
   const totalRow = new Array(TOTAL_COLS).fill('');
-  totalRow[9] = 'รวมทั้งสิ้น';
-  totalRow[13] = state.receipts.reduce((s,r)=> s + (Number(r.grandTotal)||0), 0);
+  totalRow[8] = 'รวมทั้งสิ้น';
+  totalRow[12] = totalNet;
   ['cash','transfer','card','check'].forEach(k=>{
     totalRow[payCol[k]] = state.receipts.filter(r=>r.paymentMethod===k)
       .reduce((s,r)=> s + (Number(r.grandTotal)||0), 0) || '';
   });
-  aoa.push(totalRow);
 
-  const ws = XLSX.utils.aoa_to_sheet(aoa);
-  ws['!merges'] = merges;
-  ws['!cols'] = [
-    {wch:6},{wch:16},{wch:16},{wch:26},{wch:14},{wch:14},{wch:38},{wch:8},{wch:8},
-    {wch:11},{wch:11},{wch:9},{wch:9},{wch:11},{wch:9},{wch:12},{wch:9},{wch:8},{wch:9},{wch:11},{wch:20}
-  ];
-  ws['!rows'] = [{hpt:22}];
-
-  const wb = XLSX.utils.book_new();
+  // ---- Build the workbook with ExcelJS ----
+  const wb = new ExcelJS.Workbook();
   const sheetName = (el('reportDate').value || 'สรุป').split('-').reverse().join('.');
-  XLSX.utils.book_append_sheet(wb, ws, sheetName.slice(0,31));
+  const ws = wb.addWorksheet(sheetName.slice(0,31), { views: [{ state: 'frozen', ySplit: 3, showGridLines: false }] });
 
-  const fname = `สรุปรายรับ_${branch}_${el('reportDate').value}.xlsx`;
-  XLSX.writeFile(wb, fname);
+  const EXCEL_ROW_TITLE = 1, EXCEL_ROW_H2 = 2, EXCEL_ROW_H3 = 3, EXCEL_ROW_DATA0 = 4;
+
+  // Title row
+  ws.mergeCells(EXCEL_ROW_TITLE, 1, EXCEL_ROW_TITLE, TOTAL_COLS);
+  const titleCell = ws.getCell(EXCEL_ROW_TITLE, 1);
+  titleCell.value = `สรุปรายรับประจำวัน สาขา ${branch}    ประจำวันที่ : ${dateLabel}`;
+  titleCell.font = { name: FONT_NAME, size: 20, bold: true, color: { argb: 'FF1E2A28' } };
+  titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+  ws.getRow(EXCEL_ROW_TITLE).height = 32;
+
+  // Header rows 2 & 3
+  const headerVMergeSet = new Set([0,1,2,3,4,5,6,7,8,9,10,11,12,19,20]);
+  headerVMergeSet.forEach(c=> ws.mergeCells(EXCEL_ROW_H2, c+1, EXCEL_ROW_H3, c+1));
+  ws.mergeCells(EXCEL_ROW_H2, 14, EXCEL_ROW_H2, 17); // ประเภทการรับเงิน
+  ws.mergeCells(EXCEL_ROW_H2, 18, EXCEL_ROW_H2, 19); // รับใบกำกับ/ใบเสร็จ
+
+  for(let c=1; c<=TOTAL_COLS; c++){
+    const isVMerged = headerVMergeSet.has(c-1);
+    const topCell = ws.getCell(EXCEL_ROW_H2, c);
+    const botCell = ws.getCell(EXCEL_ROW_H3, c);
+    // For vertically-merged columns, topCell and botCell are the SAME underlying
+    // cell in ExcelJS — writing to both would overwrite the label with the (empty)
+    // row-3 value, so only write once for those columns.
+    topCell.value = headerRow2[c-1] || null;
+    if(!isVMerged){
+      botCell.value = headerRow3[c-1] || null;
+    }
+    [topCell, botCell].forEach(cell=>{
+      cell.font = { name: FONT_NAME, size: 16, bold: true, color: { argb: COLOR_ACCENT_TEXT } };
+      cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLOR_ACCENT } };
+      cell.border = ALL_BORDERS;
+    });
+  }
+  ws.getRow(EXCEL_ROW_H2).height = 24;
+  ws.getRow(EXCEL_ROW_H3).height = 22;
+
+  // Data rows
+  dataRows.forEach((dr, i)=>{
+    const excelRow = EXCEL_ROW_DATA0 + i;
+    const band = (i % 2 === 1) && !dr.isExtra;
+    dr.cells.forEach((val, c)=>{
+      const cell = ws.getCell(excelRow, c+1);
+      cell.value = (val === '' ? null : val);
+      cell.font = { name: FONT_NAME, size: 14, italic: dr.isExtra, bold: dr.isExtra };
+      cell.alignment = {
+        horizontal: LEFT_ALIGN_COLS.has(c) ? 'left' : 'center',
+        vertical: 'middle',
+        wrapText: LEFT_ALIGN_COLS.has(c)
+      };
+      cell.border = ALL_BORDERS;
+      if(MONEY_COLS.has(c) && typeof val === 'number'){
+        cell.numFmt = '#,##0.00';
+      }
+      if(dr.isExtra){
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLOR_EXTRA_DISCOUNT } };
+      } else if(band){
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLOR_BAND } };
+      }
+    });
+    ws.getRow(excelRow).height = 20;
+  });
+
+  // Group merges (ลำดับ, SO, เลขที่, ชื่อลูกค้า, VAT, สุทธิ, ประเภทรับเงิน x4, ใบกำกับ x2, พนักงานขาย, หมายเหตุ)
+  const groupMergeCols = [0,1,2,3,11,12,13,14,15,16,17,18,19,20];
+  groupRanges.forEach(({startRow, endRow})=>{
+    const r1 = EXCEL_ROW_DATA0 + startRow, r2 = EXCEL_ROW_DATA0 + endRow;
+    groupMergeCols.forEach(c=>{
+      ws.mergeCells(r1, c+1, r2, c+1);
+    });
+  });
+
+  // Total row
+  const totalExcelRow = EXCEL_ROW_DATA0 + dataRows.length + 1; // one blank spacer row
+  totalRow.forEach((val, c)=>{
+    const cell = ws.getCell(totalExcelRow, c+1);
+    cell.value = (val === '' ? null : val);
+    cell.font = { name: FONT_NAME, size: 15, bold: true };
+    cell.alignment = { horizontal: LEFT_ALIGN_COLS.has(c) ? 'left' : 'center', vertical: 'middle' };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLOR_TOTAL_FILL } };
+    cell.border = { top: { style:'double', color:{argb:'FF2F6F62'} }, bottom: THIN_BORDER, left: THIN_BORDER, right: THIN_BORDER };
+    if(MONEY_COLS.has(c) && typeof val === 'number') cell.numFmt = '#,##0.00';
+  });
+  ws.getRow(totalExcelRow).height = 22;
+
+  // ---- Customer-channel summary block (bottom-left mini table) ----
+  const preparerName = el('preparerName').value.trim();
+  const CHANNELS = ['Call-in','ลูกค้า Facebook','ลูกค้า Line @','ลูกค้า Web','WALK IN','Line ส่วนตัว'];
+  const channelCounts = CHANNELS.map(ch=>
+    state.receipts.filter(r=> (r.note||'').trim().toLowerCase() === ch.toLowerCase()).length
+  );
+
+  const SUMMARY_LABEL_SPAN = 3; // cols 1-3
+  const SUMMARY_COUNT_COL = 4;
+  const SUMMARY_UNIT_COL = 5;
+  const GRAY_FILL = 'FFBFBFBF';
+  const PINK_FILL = 'FFFFC7CE';
+  const PINK_TEXT = 'FF9C0006';
+
+  let sr = totalExcelRow + 2; // leave one blank row as spacer
+
+  ws.mergeCells(sr, 1, sr, SUMMARY_UNIT_COL);
+  const summaryTitle = ws.getCell(sr, 1);
+  summaryTitle.value = 'สรุปลูกค้าประจำวัน';
+  summaryTitle.font = { name: FONT_NAME, size: 16, bold: true };
+  summaryTitle.alignment = { horizontal: 'center', vertical: 'middle' };
+  summaryTitle.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: GRAY_FILL } };
+  summaryTitle.border = ALL_BORDERS;
+  ws.getRow(sr).height = 24;
+  sr++;
+
+  CHANNELS.forEach((ch, i)=>{
+    ws.mergeCells(sr, 1, sr, SUMMARY_LABEL_SPAN);
+    const labelCell = ws.getCell(sr, 1);
+    labelCell.value = ch;
+    labelCell.font = { name: FONT_NAME, size: 14, bold: true };
+    labelCell.alignment = { horizontal: 'left', vertical: 'middle' };
+    labelCell.border = ALL_BORDERS;
+
+    const countCell = ws.getCell(sr, SUMMARY_COUNT_COL);
+    countCell.value = channelCounts[i];
+    countCell.font = { name: FONT_NAME, size: 14, bold: true, color: { argb: PINK_TEXT } };
+    countCell.alignment = { horizontal: 'center', vertical: 'middle' };
+    countCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: PINK_FILL } };
+    countCell.border = ALL_BORDERS;
+
+    const unitCell = ws.getCell(sr, SUMMARY_UNIT_COL);
+    unitCell.value = 'ท่าน';
+    unitCell.font = { name: FONT_NAME, size: 14 };
+    unitCell.alignment = { horizontal: 'left', vertical: 'middle' };
+    unitCell.border = ALL_BORDERS;
+
+    ws.getRow(sr).height = 20;
+    sr++;
+  });
+
+  [ `ผู้จัดทำ${preparerName ? '        (' + preparerName + ')' : ''}`, 'ผู้ตรวจสอบและจัดทำ' ].forEach(text=>{
+    ws.mergeCells(sr, 1, sr, SUMMARY_LABEL_SPAN);
+    const labelCell = ws.getCell(sr, 1);
+    labelCell.value = text;
+    labelCell.font = { name: FONT_NAME, size: 14 };
+    labelCell.alignment = { horizontal: 'left', vertical: 'middle' };
+    labelCell.border = ALL_BORDERS;
+    [SUMMARY_COUNT_COL, SUMMARY_UNIT_COL].forEach(c=>{
+      ws.getCell(sr, c).border = ALL_BORDERS;
+    });
+    ws.getRow(sr).height = 20;
+    sr++;
+  });
+
+  // Column widths — sized to fit content, clamped to sensible min/max
+  const MIN_W = [5,12,12,16,10,20,7,7,9,9,8,8,10,8,10,8,7,8,9,12,16];
+  const MAX_W = [6,18,18,32,16,44,9,9,13,13,11,11,13,11,14,11,9,11,13,18,28];
+  ws.columns = colMaxLen.map((len, i)=>({
+    width: Math.min(MAX_W[i], Math.max(MIN_W[i], len + 2))
+  }));
+
+  // Sheet-wide defaults
+  ws.properties.defaultRowHeight = 20;
+
+  // ---- Print setup: fit to one page wide, landscape, repeat header rows ----
+  const lastPrintRow = sr - 1;
+  ws.pageSetup.orientation = 'landscape';
+  ws.pageSetup.paperSize = 9; // A4
+  ws.pageSetup.fitToPage = true;
+  ws.pageSetup.fitToWidth = 1;
+  ws.pageSetup.fitToHeight = 0; // let it flow to as many pages tall as needed
+  ws.pageSetup.horizontalCentered = true;
+  ws.pageSetup.margins = { left: 0.25, right: 0.25, top: 0.4, bottom: 0.4, header: 0.2, footer: 0.2 };
+  ws.pageSetup.printArea = `A1:${excelColLetter(TOTAL_COLS)}${lastPrintRow}`;
+  ws.pageSetup.printTitlesRow = `${EXCEL_ROW_TITLE}:${EXCEL_ROW_H3}`; // repeat title+header rows on every printed page
+
+  const buffer = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `สรุปรายรับ_${branch}_${el('reportDate').value}.xlsx`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(()=> URL.revokeObjectURL(url), 4000);
 });
 
 renderTable();
