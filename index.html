@@ -93,14 +93,19 @@
   .actions-row{display:flex; gap:10px; margin-top:14px; flex-wrap:wrap; align-items:center;}
   .actions-row .spacer{flex:1;}
 
-  table.data{width:100%; border-collapse:collapse; font-size:13px;}
+  #tableWrap{overflow-x:auto; -webkit-overflow-scrolling:touch;}
+  table.data{width:max-content; min-width:100%; border-collapse:collapse; font-size:13px;}
   table.data th, table.data td{border:1px solid var(--line); padding:6px 7px; vertical-align:top;}
-  table.data thead th{background:#F0EFEA; font-weight:600; color:var(--accent-dark); text-align:center; font-size:12.5px;}
-  table.data td input, table.data td select{border:1px solid transparent; padding:4px 5px; font-size:13px; width:100%; background:transparent;}
+  table.data thead th{background:#F0EFEA; font-weight:600; color:var(--accent-dark); text-align:center; font-size:12.5px; white-space:nowrap;}
+  table.data td input, table.data td select{border:1px solid transparent; padding:4px 5px; font-size:13px; width:100%; min-width:70px; background:transparent; box-sizing:border-box;}
+  table.data td:has(input[data-f="customer"]) input,
+  table.data td:has(input[data-f="desc"]) input,
+  table.data td:has(input[data-f="note"]) input,
+  table.data td:has(input[data-f="salesperson"]) input{ min-width:130px; }
+  table.data td.num input{text-align:right; font-family:'JetBrains Mono', monospace; font-size:12.5px; min-width:60px;}
+  table.data td.center{text-align:center;}
   table.data td input:hover, table.data td select:hover{border-color:var(--line);}
   table.data td input:focus, table.data td select:focus{border-color:var(--accent); background:#fff;}
-  table.data td.num input{text-align:right; font-family:'JetBrains Mono', monospace; font-size:12.5px;}
-  table.data td.center{text-align:center;}
   .receipt-group:nth-child(even) .g-cell{background:#FAFAF8;}
   .g-cell{background:#fff;}
   .item-row-actions{display:flex; gap:4px; justify-content:center;}
