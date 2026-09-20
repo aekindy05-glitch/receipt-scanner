@@ -666,7 +666,7 @@ function updateTotals(){
 const FONT_NAME = 'TH Sarabun New';
 const COLOR_ACCENT = 'FF2F6F62';      // header fill (dark teal)
 const COLOR_ACCENT_TEXT = 'FFFFFFFF'; // header text (white)
-const COLOR_BAND = 'FFF3F6F5';        // subtle row banding
+const COLOR_BAND = 'FFE3EEEA';        // row banding, grouped per receipt (not per row)
 const COLOR_EXTRA_DISCOUNT = 'FFFFE699'; // yellow highlight for extra-discount row
 const COLOR_TOTAL_FILL = 'FFE4EFEC';
 const THIN_BORDER = { style: 'thin', color: { argb: 'FFCBD5D1' } };
@@ -742,7 +742,7 @@ el('exportBtn').addEventListener('click', async ()=>{
         row[20] = r.note || '';
       }
       row.forEach((v,i)=> colMaxLen[i] = Math.max(colMaxLen[i], estimateColWidth(v, i)));
-      dataRows.push({ cells: row, isExtra: false });
+      dataRows.push({ cells: row, isExtra: false, groupBand: rIdx0 % 2 });
     });
 
     if(hasExtra){
@@ -751,7 +751,7 @@ el('exportBtn').addEventListener('click', async ()=>{
       row[9] = '-';
       row[10] = r.extraDiscount || 0;
       row.forEach((v,i)=> colMaxLen[i] = Math.max(colMaxLen[i], estimateColWidth(v, i)));
-      dataRows.push({ cells: row, isExtra: true });
+      dataRows.push({ cells: row, isExtra: true, groupBand: rIdx0 % 2 });
     }
 
     if(groupRows > 1){
@@ -813,7 +813,7 @@ el('exportBtn').addEventListener('click', async ()=>{
   // Data rows
   dataRows.forEach((dr, i)=>{
     const excelRow = EXCEL_ROW_DATA0 + i;
-    const band = (i % 2 === 1) && !dr.isExtra;
+    const band = (dr.groupBand === 1) && !dr.isExtra;
     dr.cells.forEach((val, c)=>{
       const cell = ws.getCell(excelRow, c+1);
       cell.value = (val === '' ? null : val);
